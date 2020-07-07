@@ -170,7 +170,7 @@ private:
         }
         
         print_mac_address();
-        printf("prees button near bkinking led to start FUS\n");  
+        printf("press button near blinking led to start FUS\n");  
 
         _ble.gattClient().onDataRead(trigger_toggled_write);
         _ble.gattClient().onDataWritten(trigger_read);
