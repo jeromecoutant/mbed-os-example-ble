@@ -22,6 +22,24 @@
 #include "ble/gap/Gap.h"
 #include "ble/gap/AdvertisingDataParser.h"
 #include "pretty_printer.h"
+#include "shci.h"
+
+/**
+ * Define list of reboot reason
+ */
+#define CFG_REBOOT_ON_FW_APP          (0x00)
+#define CFG_REBOOT_FUS_FW_UPGRADE     (0x01)
+#define CFG_REBOOT_ON_CPU2_UPGRADE    (0x02)
+
+/**
+ * Define mapping of OTA messages in SRAM
+ */
+#define CFG_OTA_REBOOT_VAL_MSG            (*(uint8_t*)(SRAM1_BASE+0))
+#define CFG_OTA_START_SECTOR_IDX_VAL_MSG  (*(uint8_t*)(SRAM1_BASE+1))
+#define CFG_OTA_NBR_OF_SECTOR_VAL_MSG     (*(uint8_t*)(SRAM1_BASE+2))
+
+InterruptIn button2(BUTTON2);
+InterruptIn button3(BUTTON3);
 
 const static char PEER_NAME[] = "LED";
 
@@ -84,6 +102,9 @@ void trigger_read(const GattWriteCallbackParams *response) {
     }
 }
 
+volatile int _fus_option = 0;
+
+
 class LEDBlinkerDemo : ble::Gap::EventHandler {
 public:
     LEDBlinkerDemo(BLE &ble, events::EventQueue &event_queue) :
@@ -91,7 +112,7 @@ public:
         _event_queue(event_queue),
         _alive_led(LED1, 1),
         _actuated_led(LED2, 0),
-        _is_connecting(false) { }
+        _is_connecting(false){ }
 
     ~LEDBlinkerDemo() { }
 
@@ -99,20 +120,67 @@ public:
         _ble.gap().setEventHandler(this);
 
         _ble.init(this, &LEDBlinkerDemo::on_init_complete);
+    
+        //SHCI_C2_FUS_StartWs();
 
         _event_queue.call_every(500, this, &LEDBlinkerDemo::blink);
-
-        _event_queue.dispatch_forever();
+      
+       _event_queue.dispatch_forever();
     }
 
 private:
+
+    int run_fus_install()
+    {
+        uint8_t fus_state_value;
+
+        if(CFG_OTA_REBOOT_VAL_MSG == CFG_REBOOT_ON_FW_APP) {
+            printf("wireless FW is running\n");
+            return 0;
+        } 
+        
+        printf("FUS FW is running\n");
+        if(CFG_OTA_REBOOT_VAL_MSG == CFG_REBOOT_FUS_FW_UPGRADE) {
+            printf("Call SHCI_C2_FUS_FwUpgrade\n");
+            CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_ON_CPU2_UPGRADE;
+            SHCI_C2_FUS_FwUpgrade(0, 0);
+            while(1);            
+        }
+
+        if(CFG_OTA_REBOOT_VAL_MSG == CFG_REBOOT_ON_CPU2_UPGRADE) {
+            fus_state_value = SHCI_C2_FUS_GetState(NULL);
+            printf("fus_state_value %d\n", fus_state_value);
+            if(fus_state_value == 0xFF)
+            {
+                printf("Error FUS, should not get here\n");
+                while(1);
+            }
+
+            if(fus_state_value != 0)
+            {
+                printf("FUS is upgrading\n");
+                while(1);
+            }
+
+            if( fus_state_value == 0)
+            {
+                printf("FUS is done installation, start BLE FW\n");
+                CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_ON_FW_APP;
+                SHCI_C2_FUS_StartWs();
+                while(1);
+            }
+        }
+
+        return 0;
+    }
+
     /** Callback triggered when the ble initialization process has finished */
     void on_init_complete(BLE::InitializationCompleteCallbackContext *params) {
         if (params->error != BLE_ERROR_NONE) {
-            printf("Ble initialization failed.");
+            printf("Ble initialization failed.\n");
             return;
         }
-
+        
         print_mac_address();
 
         _ble.gattClient().onDataRead(trigger_toggled_write);
@@ -121,10 +189,26 @@ private:
         ble::ScanParameters scan_params;
         _ble.gap().setScanParameters(scan_params);
         _ble.gap().startScan();
+        
     }
 
     void blink() {
-        _alive_led = !_alive_led;
+        _alive_led = !_alive_led;        
+
+        if( _fus_option == 3) {       
+          printf("start FUS %d\n", _fus_option);  
+          _fus_option = 0;
+          CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_FUS_FW_UPGRADE;
+          SHCI_C2_FUS_GetState(NULL);
+          SHCI_C2_FUS_GetState(NULL);
+          while(1);
+        } 
+        
+        if( _fus_option == 2) {
+            printf("start upgrade%d\n", _fus_option); 
+            _fus_option = 0;            
+            run_fus_install();
+        }
     }
 
 private:
@@ -216,13 +300,27 @@ void schedule_ble_events(BLE::OnEventsToProcessCallbackContext *context) {
     event_queue.call(Callback<void()>(&context->ble, &BLE::processEvents));
 }
 
+void flip2()
+{
+   // _fus_option = 2;
+}
+
+void flip3()
+{
+    _fus_option = 3;
+}
+
 int main()
 {
+    button2.fall(&flip2);  // attach the address of the flip function to the rising edge
+    button3.fall(&flip3);
+    
+
     BLE &ble = BLE::Instance();
     ble.onEventsToProcess(schedule_ble_events);
 
     LEDBlinkerDemo demo(ble, event_queue);
     demo.start();
-
+    
     return 0;
 }
