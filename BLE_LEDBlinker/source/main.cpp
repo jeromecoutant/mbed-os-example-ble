@@ -23,22 +23,9 @@
 #include "ble/gap/AdvertisingDataParser.h"
 #include "pretty_printer.h"
 #include "shci.h"
+#include "app_conf.h"
 
-/**
- * Define list of reboot reason
- */
-#define CFG_REBOOT_ON_FW_APP          (0x00)
-#define CFG_REBOOT_FUS_FW_UPGRADE     (0x01)
-#define CFG_REBOOT_ON_CPU2_UPGRADE    (0x02)
-
-/**
- * Define mapping of OTA messages in SRAM
- */
-#define CFG_OTA_REBOOT_VAL_MSG            (*(uint8_t*)(SRAM1_BASE+0))
-#define CFG_OTA_START_SECTOR_IDX_VAL_MSG  (*(uint8_t*)(SRAM1_BASE+1))
-#define CFG_OTA_NBR_OF_SECTOR_VAL_MSG     (*(uint8_t*)(SRAM1_BASE+2))
-
-InterruptIn button2(BUTTON2);
+//InterruptIn button2(BUTTON2);
 InterruptIn button3(BUTTON3);
 
 const static char PEER_NAME[] = "LED";
@@ -130,7 +117,7 @@ public:
 
 private:
 
-    int run_fus_install()
+/*    int run_fus_install()
     {
         uint8_t fus_state_value;
 
@@ -173,6 +160,7 @@ private:
 
         return 0;
     }
+*/
 
     /** Callback triggered when the ble initialization process has finished */
     void on_init_complete(BLE::InitializationCompleteCallbackContext *params) {
@@ -182,6 +170,7 @@ private:
         }
         
         print_mac_address();
+        printf("prees button near bkinking led to start FUS\n");  
 
         _ble.gattClient().onDataRead(trigger_toggled_write);
         _ble.gattClient().onDataWritten(trigger_read);
@@ -196,19 +185,19 @@ private:
         _alive_led = !_alive_led;        
 
         if( _fus_option == 3) {       
-          printf("start FUS %d\n", _fus_option);  
+          printf("starting FUS\n");  
           _fus_option = 0;
-          CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_FUS_FW_UPGRADE;
           SHCI_C2_FUS_GetState(NULL);
           SHCI_C2_FUS_GetState(NULL);
           while(1);
         } 
         
-        if( _fus_option == 2) {
+/*        if( _fus_option == 2) {
             printf("start upgrade%d\n", _fus_option); 
             _fus_option = 0;            
             run_fus_install();
         }
+*/
     }
 
 private:
@@ -300,10 +289,11 @@ void schedule_ble_events(BLE::OnEventsToProcessCallbackContext *context) {
     event_queue.call(Callback<void()>(&context->ble, &BLE::processEvents));
 }
 
+/*
 void flip2()
 {
-   // _fus_option = 2;
-}
+    _fus_option = 2;
+}*/
 
 void flip3()
 {
@@ -312,9 +302,12 @@ void flip3()
 
 int main()
 {
-    button2.fall(&flip2);  // attach the address of the flip function to the rising edge
+    //button2.fall(&flip2);  // attach the address of the flip function to the rising edge
     button3.fall(&flip3);
     
+    //printf("CFG_OTA_REBOOT_VAL_MSG %d\n", CFG_OTA_REBOOT_VAL_MSG);
+    //CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_ON_CPU2_UPGRADE;
+    //printf("CFG_OTA_REBOOT_VAL_MSG again %d\n", CFG_OTA_REBOOT_VAL_MSG);
 
     BLE &ble = BLE::Instance();
     ble.onEventsToProcess(schedule_ble_events);
