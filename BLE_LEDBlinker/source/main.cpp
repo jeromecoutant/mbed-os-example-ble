@@ -210,7 +210,6 @@ private:
             printf("Ble initialization failed.\n");
             return;
         }
-        
         print_mac_address();
         printf("press button near blinking led to start FUS\n");  
 
@@ -225,19 +224,19 @@ private:
 
     void blink() {
         _alive_led = !_alive_led;        
-
+        
         //print_array((uint8_t*)CFG_OTA_REBOOT_VAL_MSG, 0x200, false);
 
         if( _fus_option == 3) {       
           printf("starting FUS\n");  
           _fus_option = 0;
-          printf("one\n");  
-          SHCI_C2_FUS_GetState(NULL);
-          printf("two\n");  
-          SHCI_C2_FUS_GetState(NULL);
-          printf("while\n");  
+          printf("first call SHCI_C2_FUS_GetState\n"); 
+          SHCI_C2_FUS_GetState( NULL );
+          printf("second call SHCI_C2_FUS_GetState\n"); 
+          SHCI_C2_FUS_GetState( NULL );
+          printf("restart?\n"); 
           while(1) {
-              //printf("restart\n");  
+              printf("restart?\n");  
           };
         } 
         
@@ -351,6 +350,7 @@ void flip3()
 
 int main()
 {
+
     //button2.fall(&flip2);  // attach the address of the flip function to the rising edge
     button3.fall(&flip3);
     
