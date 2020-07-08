@@ -35,6 +35,48 @@ static EventQueue event_queue(/* event count */ 10 * EVENTS_EVENT_SIZE);
 static DiscoveredCharacteristic led_characteristic;
 static bool trigger_led_characteristic = false;
 
+void printpad(uint8_t num)
+{
+    if(num < 16) {
+        printf("0");
+        printf("%X", num);
+    } else
+    {
+        printf("%02X", num);
+    }
+    
+}
+
+#define print_array(_arr, _size, big_end) print_array___(_arr, _size, big_end, #_arr)
+void print_array___(uint8_t* arr, size_t size, bool big_end, const char *name) {
+    printf("vvvvvvvvvv %s vvvvvvvvvv\n\t", name);
+    for (size_t i=0; i < size; i+=4)
+    {
+        if (i && ((i % 16) == 0)){
+            printf("\n\t");
+        }
+        else if (i && ((i % 4) == 0)){
+            printf(" ");
+        }
+        printf("0x");
+        if( big_end ) {           
+            printpad(arr[i]);
+            printpad(arr[i+1]);
+            printpad(arr[i+2]);
+            printpad(arr[i+3]);
+        } else {
+            printpad(arr[i+3]);
+            printpad(arr[i+2]);
+            printpad(arr[i+1]);
+            printpad(arr[i]);
+        }
+    }
+    if(big_end)
+        printf("\n big endian presentation--------%s----\n", name);
+    else
+        printf("\n little endian presentation-----%s-------\n", name);
+}
+
 void service_discovery(const DiscoveredService *service) {
     if (service->getUUID().shortOrLong() == UUID::UUID_TYPE_SHORT) {
         printf("S UUID-%x attrs[%u %u]\r\n", service->getUUID().getShortUUID(), service->getStartHandle(), service->getEndHandle());
@@ -184,12 +226,19 @@ private:
     void blink() {
         _alive_led = !_alive_led;        
 
+        //print_array((uint8_t*)CFG_OTA_REBOOT_VAL_MSG, 0x200, false);
+
         if( _fus_option == 3) {       
           printf("starting FUS\n");  
           _fus_option = 0;
+          printf("one\n");  
           SHCI_C2_FUS_GetState(NULL);
+          printf("two\n");  
           SHCI_C2_FUS_GetState(NULL);
-          while(1);
+          printf("while\n");  
+          while(1) {
+              //printf("restart\n");  
+          };
         } 
         
 /*        if( _fus_option == 2) {
