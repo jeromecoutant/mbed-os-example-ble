@@ -25,8 +25,6 @@
 #include "shci.h"
 #include "app_conf.h"
 
-//InterruptIn button2(BUTTON2);
-InterruptIn button3(BUTTON3);
 
 const static char PEER_NAME[] = "LED";
 
@@ -35,47 +33,10 @@ static EventQueue event_queue(/* event count */ 10 * EVENTS_EVENT_SIZE);
 static DiscoveredCharacteristic led_characteristic;
 static bool trigger_led_characteristic = false;
 
-void printpad(uint8_t num)
-{
-    if(num < 16) {
-        printf("0");
-        printf("%X", num);
-    } else
-    {
-        printf("%02X", num);
-    }
-    
-}
 
-#define print_array(_arr, _size, big_end) print_array___(_arr, _size, big_end, #_arr)
-void print_array___(uint8_t* arr, size_t size, bool big_end, const char *name) {
-    printf("vvvvvvvvvv %s vvvvvvvvvv\n\t", name);
-    for (size_t i=0; i < size; i+=4)
-    {
-        if (i && ((i % 16) == 0)){
-            printf("\n\t");
-        }
-        else if (i && ((i % 4) == 0)){
-            printf(" ");
-        }
-        printf("0x");
-        if( big_end ) {           
-            printpad(arr[i]);
-            printpad(arr[i+1]);
-            printpad(arr[i+2]);
-            printpad(arr[i+3]);
-        } else {
-            printpad(arr[i+3]);
-            printpad(arr[i+2]);
-            printpad(arr[i+1]);
-            printpad(arr[i]);
-        }
-    }
-    if(big_end)
-        printf("\n big endian presentation--------%s----\n", name);
-    else
-        printf("\n little endian presentation-----%s-------\n", name);
-}
+extern "C" int handle_ready_event;
+static bool startBLEbyExample = false;
+static bool startFUSbyExample = false;
 
 void service_discovery(const DiscoveredService *service) {
     if (service->getUUID().shortOrLong() == UUID::UUID_TYPE_SHORT) {
@@ -146,106 +107,58 @@ public:
     ~LEDBlinkerDemo() { }
 
     void start() {
+
         _ble.gap().setEventHandler(this);
-
+        printf("ble.init\n");
         _ble.init(this, &LEDBlinkerDemo::on_init_complete);
+        printf("ble.init done\n");
     
-        //SHCI_C2_FUS_StartWs();
+        if( startBLEbyExample && startFUSbyExample)
+            printf("startBLEbyExample && startFUSbyExample are true, please choose one\n");
 
-        _event_queue.call_every(500, this, &LEDBlinkerDemo::blink);
+
+        if ( startBLEbyExample ) {
+            printf("start BLE\n");
+            SHCI_C2_FUS_StartWs();
+        }
+
+        if ( startFUSbyExample ) {
+            printf("start FUS\n");
+            SHCI_C2_FUS_GetState( NULL );
+            SHCI_C2_FUS_GetState( NULL );
+        }      
+
+        printf("handle_ready_event @start %d\n", handle_ready_event);
+      //_event_queue.call_every(5000, this, &LEDBlinkerDemo::blink);
       
-       _event_queue.dispatch_forever();
+      _event_queue.dispatch_forever();
     }
 
 private:
 
-/*    int run_fus_install()
-    {
-        uint8_t fus_state_value;
-
-        if(CFG_OTA_REBOOT_VAL_MSG == CFG_REBOOT_ON_FW_APP) {
-            printf("wireless FW is running\n");
-            return 0;
-        } 
-        
-        printf("FUS FW is running\n");
-        if(CFG_OTA_REBOOT_VAL_MSG == CFG_REBOOT_FUS_FW_UPGRADE) {
-            printf("Call SHCI_C2_FUS_FwUpgrade\n");
-            CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_ON_CPU2_UPGRADE;
-            SHCI_C2_FUS_FwUpgrade(0, 0);
-            while(1);            
-        }
-
-        if(CFG_OTA_REBOOT_VAL_MSG == CFG_REBOOT_ON_CPU2_UPGRADE) {
-            fus_state_value = SHCI_C2_FUS_GetState(NULL);
-            printf("fus_state_value %d\n", fus_state_value);
-            if(fus_state_value == 0xFF)
-            {
-                printf("Error FUS, should not get here\n");
-                while(1);
-            }
-
-            if(fus_state_value != 0)
-            {
-                printf("FUS is upgrading\n");
-                while(1);
-            }
-
-            if( fus_state_value == 0)
-            {
-                printf("FUS is done installation, start BLE FW\n");
-                CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_ON_FW_APP;
-                SHCI_C2_FUS_StartWs();
-                while(1);
-            }
-        }
-
-        return 0;
-    }
-*/
-
     /** Callback triggered when the ble initialization process has finished */
     void on_init_complete(BLE::InitializationCompleteCallbackContext *params) {
-        if (params->error != BLE_ERROR_NONE) {
-            printf("Ble initialization failed.\n");
-            return;
+
+        printf("handle_ready_event @on_init_complete %d\n", handle_ready_event);
+
+        if( handle_ready_event == 1) {
+            if (params->error != BLE_ERROR_NONE) {
+                printf("Ble initialization failed.\n");
+                return;
+            }
+       
+            print_mac_address();
+            _ble.gattClient().onDataRead(trigger_toggled_write);
+            _ble.gattClient().onDataWritten(trigger_read);
+
+            ble::ScanParameters scan_params;
+            _ble.gap().setScanParameters(scan_params);
+            _ble.gap().startScan();
         }
-        print_mac_address();
-        printf("press button near blinking led to start FUS\n");  
-
-        _ble.gattClient().onDataRead(trigger_toggled_write);
-        _ble.gattClient().onDataWritten(trigger_read);
-
-        ble::ScanParameters scan_params;
-        _ble.gap().setScanParameters(scan_params);
-        _ble.gap().startScan();
-        
     }
 
     void blink() {
-        _alive_led = !_alive_led;        
-        
-        //print_array((uint8_t*)CFG_OTA_REBOOT_VAL_MSG, 0x200, false);
-
-        if( _fus_option == 3) {       
-          printf("starting FUS\n");  
-          _fus_option = 0;
-          printf("first call SHCI_C2_FUS_GetState\n"); 
-          SHCI_C2_FUS_GetState( NULL );
-          printf("second call SHCI_C2_FUS_GetState\n"); 
-          SHCI_C2_FUS_GetState( NULL );
-          printf("restart?\n"); 
-          while(1) {
-              printf("restart?\n");  
-          };
-        } 
-        
-/*        if( _fus_option == 2) {
-            printf("start upgrade%d\n", _fus_option); 
-            _fus_option = 0;            
-            run_fus_install();
-        }
-*/
+        _alive_led = !_alive_led;   
     }
 
 private:
@@ -337,29 +250,16 @@ void schedule_ble_events(BLE::OnEventsToProcessCallbackContext *context) {
     event_queue.call(Callback<void()>(&context->ble, &BLE::processEvents));
 }
 
-/*
-void flip2()
-{
-    _fus_option = 2;
-}*/
-
-void flip3()
-{
-    _fus_option = 3;
-}
 
 int main()
 {
+    printf("Start Example\n");
 
-    //button2.fall(&flip2);  // attach the address of the flip function to the rising edge
-    button3.fall(&flip3);
+    printf("CFG_OTA_REBOOT_VAL_MSG %d\n", CFG_OTA_REBOOT_VAL_MSG);
+    CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_ON_FW_APP;
     
-    //printf("CFG_OTA_REBOOT_VAL_MSG %d\n", CFG_OTA_REBOOT_VAL_MSG);
-    //CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_ON_CPU2_UPGRADE;
-    //printf("CFG_OTA_REBOOT_VAL_MSG again %d\n", CFG_OTA_REBOOT_VAL_MSG);
-
     BLE &ble = BLE::Instance();
-    ble.onEventsToProcess(schedule_ble_events);
+    //ble.onEventsToProcess(schedule_ble_events);
 
     LEDBlinkerDemo demo(ble, event_queue);
     demo.start();
