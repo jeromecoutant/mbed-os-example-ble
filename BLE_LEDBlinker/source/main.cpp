@@ -24,7 +24,7 @@
 #include "pretty_printer.h"
 #include "shci.h"
 #include "app_conf.h"
-
+#include "mbed_trace.h"
 
 const static char PEER_NAME[] = "LED";
 
@@ -34,7 +34,7 @@ static DiscoveredCharacteristic led_characteristic;
 static bool trigger_led_characteristic = false;
 
 
-extern "C" int handle_ready_event;
+// extern "C" int handle_ready_event;
 static bool startBLEbyExample = false;
 static bool startFUSbyExample = false;
 
@@ -128,7 +128,7 @@ public:
             SHCI_C2_FUS_GetState( NULL );
         }      
 
-        printf("handle_ready_event @start %d\n", handle_ready_event);
+        // printf("handle_ready_event @start %d\n", handle_ready_event);
       //_event_queue.call_every(5000, this, &LEDBlinkerDemo::blink);
       
       _event_queue.dispatch_forever();
@@ -139,9 +139,9 @@ private:
     /** Callback triggered when the ble initialization process has finished */
     void on_init_complete(BLE::InitializationCompleteCallbackContext *params) {
 
-        printf("handle_ready_event @on_init_complete %d\n", handle_ready_event);
+        // printf("handle_ready_event @on_init_complete %d\n", handle_ready_event);
 
-        if( handle_ready_event == 1) {
+        // if( handle_ready_event == 1) {
             if (params->error != BLE_ERROR_NONE) {
                 printf("Ble initialization failed.\n");
                 return;
@@ -154,7 +154,7 @@ private:
             ble::ScanParameters scan_params;
             _ble.gap().setScanParameters(scan_params);
             _ble.gap().startScan();
-        }
+        // }
     }
 
     void blink() {
@@ -254,6 +254,8 @@ void schedule_ble_events(BLE::OnEventsToProcessCallbackContext *context) {
 int main()
 {
     printf("Start Example\n");
+
+    mbed_trace_init();
 
     printf("CFG_OTA_REBOOT_VAL_MSG %d\n", CFG_OTA_REBOOT_VAL_MSG);
     CFG_OTA_REBOOT_VAL_MSG = CFG_REBOOT_ON_FW_APP;
